@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -44,7 +45,19 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
+	contentType := header.Header.Get("Content-Type")
+
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil && !errors.Is(err, mime.ErrInvalidMediaParameter) {
+		respondWithError(w, http.StatusBadRequest, "Unable to parse file type", err)
+		return
+	}
+
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Unsupported media type", err)
+		return
+	}
+
 	extensions, err := mime.ExtensionsByType(mediaType)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to determine file extensions", err)
@@ -69,7 +82,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer dst.Close()
-	
+
 	_, err = io.Copy(dst, file)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to copy file", err)
